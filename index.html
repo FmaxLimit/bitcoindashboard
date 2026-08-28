@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="Live Bitcoin price dashboard with BTC/USD and BTC/PHP market data."
+    >
+
+    <title>Bitcoin Live Dashboard</title>
+
+    <!-- Google Font -->
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <!-- Chart.js -->
+    <script
+        src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+    ></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =========================================
+         TOP NAVIGATION
+    ========================================== -->
+
+    <header class="topbar">
+
+        <div class="brand">
+
+            <div class="bitcoin-logo">
+                ₿
+            </div>
+
+            <div>
+                <div class="brand-title">
+                    Bitcoin Live
+                </div>
+
+                <div class="brand-subtitle">
+                    Market Dashboard
+                </div>
+            </div>
+
+        </div>
+
+
+        <div class="topbar-right">
+
+            <div class="connection-status">
+
+                <span
+                    id="connectionDot"
+                    class="status-dot offline"
+                ></span>
+
+                <span id="connectionText">
+                    Connecting...
+                </span>
+
+            </div>
+
+            <div
+                id="liveClock"
+                class="clock"
+            >
+                --:--:--
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <!-- =========================================
+         MAIN CONTENT
+    ========================================== -->
+
+    <main class="dashboard">
+
+        <!-- =====================================
+             HERO PRICE
+        ====================================== -->
+
+        <section class="hero-grid">
+
+            <div class="price-card">
+
+                <div class="card-top">
+
+                    <div>
+
+                        <div class="asset-name">
+                            Bitcoin
+                        </div>
+
+                        <div class="asset-symbol">
+                            BTC / USD
+                        </div>
+
+                    </div>
+
+
+                    <div class="live-badge">
+
+                        <span class="pulse"></span>
+
+                        LIVE
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="btcUsdPrice"
+                    class="main-price"
+                >
+                    $--,---.-- 
+                </div>
+
+
+                <div class="price-change-row">
+
+                    <span
+                        id="usdChange"
+                        class="change neutral"
+                    >
+                        --%
+                    </span>
+
+                    <span class="change-label">
+                        24h
+                    </span>
+
+                </div>
+
+
+                <div class="price-meta">
+
+                    <span>
+                        Updated
+                    </span>
+
+                    <strong id="lastUpdated">
+                        --
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <!-- PHP PRICE -->
+
+            <div class="price-card php-card">
+
+                <div class="card-top">
+
+                    <div>
+
+                        <div class="asset-name">
+                            Bitcoin
+                        </div>
+
+                        <div class="asset-symbol">
+                            BTC / PHP
+                        </div>
+
+                    </div>
+
+                    <div class="currency-symbol">
+                        ₱
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="btcPhpPrice"
+                    class="main-price php-price"
+                >
+                    ₱--,---,---.--
+                </div>
+
+
+                <div class="price-change-row">
+
+                    <span
+                        id="phpChange"
+                        class="change neutral"
+                    >
+                        --%
+                    </span>
+
+                    <span class="change-label">
+                        24h
+                    </span>
+
+                </div>
+
+
+                <div class="price-meta">
+
+                    <span>
+                        Exchange rate
+                    </span>
+
+                    <strong id="btcPhpRate">
+                        ₱--
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             MARKET STATISTICS
+        ====================================== -->
+
+        <section class="stats-grid">
+
+            <div class="stat-card">
+
+                <div class="stat-label">
+                    24H HIGH
+                </div>
+
+                <div
+                    id="high24"
+                    class="stat-value"
+                >
+                    $--
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-label">
+                    24H LOW
+                </div>
+
+                <div
+                    id="low24"
+                    class="stat-value"
+                >
+                    $--
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-label">
+                    24H VOLUME
+                </div>
+
+                <div
+                    id="volume24"
+                    class="stat-value"
+                >
+                    $--
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-label">
+                    MARKET CAP
+                </div>
+
+                <div
+                    id="marketCap"
+                    class="stat-value"
+                >
+                    $--
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             CHART
+        ====================================== -->
+
+        <section class="chart-card">
+
+            <div class="chart-header">
+
+                <div>
+
+                    <div class="chart-title">
+                        Bitcoin Price
+                    </div>
+
+                    <div
+                        id="chartSubtitle"
+                        class="chart-subtitle"
+                    >
+                        Real-time BTC/USD market movement
+                    </div>
+
+                </div>
+
+
+                <div class="time-buttons">
+
+                    <button
+                        class="time-btn active"
+                        data-range="live"
+                    >
+                        LIVE
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="1m"
+                    >
+                        1M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="5m"
+                    >
+                        5M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="15m"
+                    >
+                        15M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="30m"
+                    >
+                        30M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="1h"
+                    >
+                        1H
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="24h"
+                    >
+                        24H
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="7d"
+                    >
+                        7D
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="30d"
+                    >
+                        30D
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-range="1y"
+                    >
+                        1Y
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="chart-container">
+
+                <canvas id="bitcoinChart"></canvas>
+
+                <div
+                    id="chartLoading"
+                    class="chart-loading"
+                >
+                    Loading Bitcoin market data...
+                </div>
+
+            </div>
+
+
+            <div class="period-summary">
+
+                <div class="period-item">
+
+                    <span class="period-label">HIGH</span>
+
+                    <span
+                        id="periodHigh"
+                        class="period-value"
+                    >
+                        --
+                    </span>
+
+                </div>
+
+
+                <div class="period-item">
+
+                    <span class="period-label">LOW</span>
+
+                    <span
+                        id="periodLow"
+                        class="period-value"
+                    >
+                        --
+                    </span>
+
+                </div>
+
+
+                <div class="period-item">
+
+                    <span class="period-label">CURRENT</span>
+
+                    <span
+                        id="periodCurrent"
+                        class="period-value"
+                    >
+                        --
+                    </span>
+
+                </div>
+
+
+                <div class="period-item">
+
+                    <span class="period-label">POSITION</span>
+
+                    <span
+                        id="periodPosition"
+                        class="signal-value neutral period-position"
+                    >
+                        --
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="chart-footer">
+
+                <div>
+                    <span class="footer-label">
+                        DATA SOURCE
+                    </span>
+
+                    <strong>
+                        Binance + CoinGecko
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span class="footer-label">
+                        UPDATE
+                    </span>
+
+                    <strong>
+                        Live (WebSocket)
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span class="footer-label">
+                        LAST API SYNC
+                    </span>
+
+                    <strong id="apiSync">
+                        --
+                    </strong>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             MOMENTUM SIGNAL
+             NOTE: this is a simple trend heuristic
+             based on recent price movement only.
+             It is NOT a prediction and should never
+             be used to make trading decisions.
+        ====================================== -->
+
+        <section class="momentum-card">
+
+            <div class="momentum-header">
+
+                <div>
+
+                    <div class="momentum-title">
+                        Momentum Signal
+                    </div>
+
+                    <div class="momentum-subtitle">
+                        Recent trend direction, not a forecast
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="momentum-grid">
+
+                <div class="momentum-item">
+
+                    <div class="momentum-label">
+                        NEXT 5 MIN
+                    </div>
+
+                    <div
+                        id="momentum5m"
+                        class="momentum-signal neutral"
+                    >
+                        <span class="momentum-arrow">→</span>
+                        <span class="momentum-text">Gathering data...</span>
+                    </div>
+
+                    <div
+                        id="momentum5mChange"
+                        class="momentum-change"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="momentum-item">
+
+                    <div class="momentum-label">
+                        NEXT 15 MIN
+                    </div>
+
+                    <div
+                        id="momentum15m"
+                        class="momentum-signal neutral"
+                    >
+                        <span class="momentum-arrow">→</span>
+                        <span class="momentum-text">Gathering data...</span>
+                    </div>
+
+                    <div
+                        id="momentum15mChange"
+                        class="momentum-change"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="momentum-item">
+
+                    <div class="momentum-label">
+                        NEXT 1 HOUR
+                    </div>
+
+                    <div
+                        id="momentum1h"
+                        class="momentum-signal neutral"
+                    >
+                        <span class="momentum-arrow">→</span>
+                        <span class="momentum-text">Gathering data...</span>
+                    </div>
+
+                    <div
+                        id="momentum1hChange"
+                        class="momentum-change"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="momentum-disclaimer">
+                <strong>Not a prediction.</strong>
+                This only reflects how price has moved recently - it says nothing about
+                what happens next. Short-term crypto price direction is close to a coin
+                flip even for professional models. Never use this to make trading decisions.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             MARKET SIGNALS
+             Raw context data - not combined into
+             any score or prediction.
+        ====================================== -->
+
+        <section class="signals-card">
+
+            <div class="momentum-header">
+
+                <div>
+
+                    <div class="momentum-title">
+                        Market Signals
+                    </div>
+
+                    <div class="momentum-subtitle">
+                        Raw futures &amp; sentiment data for context
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="signals-grid">
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">
+                        FUNDING RATE (BTCUSDT PERP)
+                    </div>
+
+                    <div
+                        id="fundingRateValue"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                    <div
+                        id="fundingRateNext"
+                        class="signal-sub"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">
+                        OPEN INTEREST
+                    </div>
+
+                    <div
+                        id="openInterestValue"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                    <div
+                        id="openInterestUsd"
+                        class="signal-sub"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">
+                        FEAR &amp; GREED INDEX
+                    </div>
+
+                    <div
+                        id="fearGreedValue"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                    <div
+                        id="fearGreedLabel"
+                        class="signal-sub"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="momentum-disclaimer">
+                <strong>Context, not a score.</strong>
+                These are raw exchange/sentiment data points shown independently -
+                they are not combined into a bullish/bearish rating or a probability.
+                Funding rate reflects current positioning, not future price direction.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             LIVE TICKER
+        ====================================== -->
+
+        <section class="ticker-card">
+
+            <div class="ticker-toolbar">
+
+                <div class="ticker-title">
+                    Live Price Stream
+                </div>
+
+
+                <div class="time-buttons">
+
+                    <button
+                        class="time-btn active"
+                        data-ticker-range="live"
+                    >
+                        LIVE
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-ticker-range="1m"
+                    >
+                        1M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-ticker-range="5m"
+                    >
+                        5M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-ticker-range="15m"
+                    >
+                        15M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-ticker-range="30m"
+                    >
+                        30M
+                    </button>
+
+                    <button
+                        class="time-btn"
+                        data-ticker-range="1h"
+                    >
+                        1H
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="ticker-table">
+
+                <div class="ticker-header">
+
+                    <span>
+                        TIME
+                    </span>
+
+                    <span>
+                        BTC/USD
+                    </span>
+
+                    <span>
+                        BTC/PHP
+                    </span>
+
+                    <span>
+                        CHANGE
+                    </span>
+
+                </div>
+
+
+                <div
+                    id="tickerRows"
+                    class="ticker-body"
+                >
+
+                    <div class="empty-ticker">
+                        Waiting for live data...
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             SYSTEM STATUS
+        ====================================== -->
+
+        <section class="system-card">
+
+            <div class="system-title">
+                System Status
+            </div>
+
+
+            <div class="system-grid">
+
+                <div class="system-item">
+
+                    <span
+                        id="apiDot"
+                        class="small-status offline"
+                    ></span>
+
+                    <div>
+
+                        <strong>
+                            Live Price Feed
+                        </strong>
+
+                        <span id="apiStatus">
+                            Connecting
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="system-item">
+
+                    <span
+                        id="chartDot"
+                        class="small-status offline"
+                    ></span>
+
+                    <div>
+
+                        <strong>
+                            Chart Engine
+                        </strong>
+
+                        <span id="chartStatus">
+                            Initializing
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="system-item">
+
+                    <span
+                        id="updateDot"
+                        class="small-status offline"
+                    ></span>
+
+                    <div>
+
+                        <strong>
+                            Auto Update
+                        </strong>
+
+                        <span id="updateStatus">
+                            Waiting
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+    </main>
+
+
+    <!-- =========================================
+         FOOTER
+    ========================================== -->
+
+    <footer class="footer">
+
+        <div>
+            Bitcoin Live Dashboard
+        </div>
+
+        <div>
+            Live price via Binance &middot; PHP conversion &amp; market cap via CoinGecko
+        </div>
+
+    </footer>
+
+
+    <script src="script.js"></script>
+
+</body>
+</html>
