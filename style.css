@@ -819,6 +819,81 @@ body {
 }
 
 
+/* =========================================================
+   INTERVAL STRIP
+========================================================= */
+
+.interval-strip {
+
+    display: flex;
+
+    gap: 6px;
+
+    margin-top: 18px;
+
+}
+
+
+.interval-item {
+
+    flex: 1;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 6px;
+
+}
+
+
+.interval-time {
+
+    font-size: 9px;
+
+    color: var(--muted);
+
+    white-space: nowrap;
+
+}
+
+
+.interval-bar {
+
+    width: 100%;
+
+    height: 8px;
+
+    border-radius: 4px;
+
+    background: var(--surface-3);
+
+}
+
+
+.interval-bar.up {
+
+    background: var(--green);
+
+}
+
+
+.interval-bar.down {
+
+    background: var(--red);
+
+}
+
+
+.interval-bar.flat {
+
+    background: var(--muted);
+
+}
+
+
 .chart-footer {
 
     display: flex;
@@ -1266,6 +1341,206 @@ body {
     .signals-grid {
 
         grid-template-columns: 1fr;
+
+    }
+
+}
+
+
+/* =========================================================
+   MOMENTUM BACKTEST CALCULATOR
+========================================================= */
+
+.backtest-card {
+
+    margin-top: 20px;
+
+    background: var(--surface);
+
+    border: 1px solid var(--border);
+
+    border-radius: var(--radius);
+
+    padding: 22px;
+
+}
+
+
+.backtest-explainer {
+
+    color: var(--muted);
+
+    font-size: 12px;
+
+    line-height: 1.6;
+
+    margin-bottom: 18px;
+
+}
+
+
+.backtest-explainer strong {
+
+    color: var(--text);
+
+}
+
+
+.backtest-inputs {
+
+    display: flex;
+
+    align-items: flex-end;
+
+    gap: 12px;
+
+    flex-wrap: wrap;
+
+    margin-bottom: 14px;
+
+}
+
+
+.backtest-input-group {
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 6px;
+
+}
+
+
+.backtest-input-group label {
+
+    font-size: 9px;
+
+    font-weight: 700;
+
+    color: var(--muted);
+
+    letter-spacing: .7px;
+
+}
+
+
+.backtest-input-group input {
+
+    width: 130px;
+
+    background: var(--surface-2);
+
+    border: 1px solid var(--border);
+
+    border-radius: 8px;
+
+    padding: 9px 10px;
+
+    color: var(--text);
+
+    font-size: 13px;
+
+    font-variant-numeric: tabular-nums;
+
+}
+
+
+.backtest-input-group input:focus {
+
+    outline: none;
+
+    border-color: var(--orange);
+
+}
+
+
+.backtest-run-btn {
+
+    background: var(--orange);
+
+    color: #05070a;
+
+    border: none;
+
+    border-radius: 8px;
+
+    padding: 10px 18px;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    cursor: pointer;
+
+    transition: .2s ease;
+
+}
+
+
+.backtest-run-btn:hover {
+
+    filter: brightness(1.08);
+
+}
+
+
+.backtest-error {
+
+    color: var(--red);
+
+    font-size: 12px;
+
+    margin-bottom: 10px;
+
+    min-height: 0;
+
+}
+
+
+.backtest-error:empty {
+
+    display: none;
+
+}
+
+
+.backtest-results {
+
+    display: grid;
+
+    grid-template-columns: repeat(4, 1fr);
+
+    gap: 12px;
+
+    margin-bottom: 18px;
+
+}
+
+
+@media (max-width: 700px) {
+
+    .backtest-results {
+
+        grid-template-columns: repeat(2, 1fr);
+
+    }
+
+    .backtest-inputs {
+
+        width: 100%;
+
+    }
+
+    .backtest-input-group input {
+
+        width: 100%;
+
+    }
+
+    .backtest-run-btn {
+
+        width: 100%;
 
     }
 

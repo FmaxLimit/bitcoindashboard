@@ -486,6 +486,12 @@
             </div>
 
 
+            <div
+                id="intervalStrip"
+                class="interval-strip"
+            ></div>
+
+
             <div class="chart-footer">
 
                 <div>
@@ -733,14 +739,270 @@
 
                 </div>
 
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">
+                        24H TRADE COUNT
+                    </div>
+
+                    <div
+                        id="tradeCountValue"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                    <div class="signal-sub">
+                        Executions on Binance BTCUSDT
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">
+                        BID/ASK SPREAD
+                    </div>
+
+                    <div
+                        id="spreadValue"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                    <div
+                        id="spreadSub"
+                        class="signal-sub"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">
+                        NETWORK TX (24H)
+                    </div>
+
+                    <div
+                        id="networkTxValue"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                    <div class="signal-sub">
+                        Blockchain-wide, not exchange-only
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">
+                        NETWORK HASH RATE
+                    </div>
+
+                    <div
+                        id="hashRateValue"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                    <div class="signal-sub">
+                        Miner security, slow-moving
+                    </div>
+
+                </div>
+
             </div>
 
 
             <div class="momentum-disclaimer">
                 <strong>Context, not a score.</strong>
-                These are raw exchange/sentiment data points shown independently -
+                These are raw exchange/network/sentiment data points shown independently -
                 they are not combined into a bullish/bearish rating or a probability.
-                Funding rate reflects current positioning, not future price direction.
+                Funding rate and trade count reflect current activity, not future price direction.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================
+             MOMENTUM BACKTEST CALCULATOR
+             Historical, one-off calculation over
+             already-buffered live data. No money,
+             no running score, no repeat-play loop.
+        ====================================== -->
+
+        <section class="backtest-card">
+
+            <div class="momentum-header">
+
+                <div>
+
+                    <div class="momentum-title">
+                        Momentum Backtest
+                    </div>
+
+                    <div class="momentum-subtitle">
+                        Historical win rate of one simple rule, on data already buffered
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="backtest-explainer">
+                Set a <strong>Start</strong> clock time to anchor the very first round.
+                <strong>Pick</strong> and <strong>End</strong> are durations, not clock
+                times - e.g. Pick = 5 min, End = 10 min means: check the price 5 minutes
+                after Start (the "Pick" checkpoint), then again 10 minutes after Start
+                (the "End" checkpoint). Once that round finishes, the next round's Start
+                is automatically that round's End - it keeps chaining forward through
+                every bit of buffered live history, back to back, with no gaps. Then it
+                checks each round: did the price move the same direction from
+                <strong>Start&rarr;Pick</strong> as it then did from
+                <strong>Pick&rarr;End</strong>? That's a "win" for the momentum rule.
+                It's a backtest of the past, not a bet, and it doesn't use or track any money.
+            </div>
+
+
+            <div class="backtest-inputs">
+
+                <div class="backtest-input-group">
+
+                    <label for="backtestStart">START TIME</label>
+
+                    <input
+                        type="time"
+                        id="backtestStart"
+                        value="01:00"
+                        step="60"
+                    >
+
+                </div>
+
+
+                <div class="backtest-input-group">
+
+                    <label for="backtestPick">PICK AFTER (min)</label>
+
+                    <input
+                        type="number"
+                        id="backtestPick"
+                        value="5"
+                        min="0.5"
+                        step="0.5"
+                    >
+
+                </div>
+
+
+                <div class="backtest-input-group">
+
+                    <label for="backtestEnd">END AFTER (min)</label>
+
+                    <input
+                        type="number"
+                        id="backtestEnd"
+                        value="10"
+                        min="1"
+                        step="0.5"
+                    >
+
+                </div>
+
+
+                <button
+                    id="runBacktestBtn"
+                    class="backtest-run-btn"
+                >
+                    Run Backtest
+                </button>
+
+            </div>
+
+
+            <div
+                id="backtestError"
+                class="backtest-error"
+            ></div>
+
+
+            <div class="backtest-results">
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">ROUNDS FOUND</div>
+
+                    <div
+                        id="backtestRounds"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">WINS</div>
+
+                    <div
+                        id="backtestWins"
+                        class="signal-value up"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">LOSSES</div>
+
+                    <div
+                        id="backtestLosses"
+                        class="signal-value down"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+
+                <div class="signal-item">
+
+                    <div class="momentum-label">WIN RATE</div>
+
+                    <div
+                        id="backtestWinRate"
+                        class="signal-value neutral"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div
+                id="backtestWarning"
+                class="momentum-disclaimer"
+            >
+                Set your checkpoints above and click Run Backtest.
             </div>
 
         </section>

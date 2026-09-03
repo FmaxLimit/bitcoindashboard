@@ -12,6 +12,9 @@
 
 const CONFIG = {
 
+    BACKEND_API_BASE:
+        "http://localhost:3000/api",
+
     API_BASE:
         "https://api.coingecko.com/api/v3",
 
@@ -90,6 +93,19 @@ const CONFIG = {
         "https://api.alternative.me/fng/?limit=1",
 
     FEAR_GREED_INTERVAL:
+        15 * 60 * 1000,
+
+    /*
+     * blockchain.info's simple keyless /q/ endpoints -
+     * network-wide (not exchange-specific) transaction
+     * count and hash rate. These change slowly, so they're
+     * polled infrequently.
+     */
+
+    BLOCKCHAIN_API_BASE:
+        "https://api.blockchain.info/q",
+
+    NETWORK_STATS_INTERVAL:
         15 * 60 * 1000
 
 };
@@ -131,6 +147,16 @@ const state = {
 
     fearGreedLabel: null,
 
+    tradeCount24h: null,
+
+    bestBid: null,
+
+    bestAsk: null,
+
+    networkTxCount24h: null,
+
+    networkHashRateGHs: null,
+
     lastApiUpdate: null,
 
     connection: false,
@@ -145,6 +171,8 @@ const state = {
 
     historical: {},
 
+    chartYRanges: {},
+
     chart: null,
 
     socket: null,
@@ -158,6 +186,8 @@ const state = {
     signalsTimer: null,
 
     fearGreedTimer: null,
+
+    networkStatsTimer: null,
 
     fetching: false
 
@@ -340,6 +370,31 @@ const elements = {
             "fearGreedLabel"
         ),
 
+    tradeCountValue:
+        document.getElementById(
+            "tradeCountValue"
+        ),
+
+    spreadValue:
+        document.getElementById(
+            "spreadValue"
+        ),
+
+    spreadSub:
+        document.getElementById(
+            "spreadSub"
+        ),
+
+    networkTxValue:
+        document.getElementById(
+            "networkTxValue"
+        ),
+
+    hashRateValue:
+        document.getElementById(
+            "hashRateValue"
+        ),
+
     periodHigh:
         document.getElementById(
             "periodHigh"
@@ -358,6 +413,61 @@ const elements = {
     periodPosition:
         document.getElementById(
             "periodPosition"
+        ),
+
+    intervalStrip:
+        document.getElementById(
+            "intervalStrip"
+        ),
+
+    backtestStart:
+        document.getElementById(
+            "backtestStart"
+        ),
+
+    backtestPick:
+        document.getElementById(
+            "backtestPick"
+        ),
+
+    backtestEnd:
+        document.getElementById(
+            "backtestEnd"
+        ),
+
+    runBacktestBtn:
+        document.getElementById(
+            "runBacktestBtn"
+        ),
+
+    backtestError:
+        document.getElementById(
+            "backtestError"
+        ),
+
+    backtestRounds:
+        document.getElementById(
+            "backtestRounds"
+        ),
+
+    backtestWins:
+        document.getElementById(
+            "backtestWins"
+        ),
+
+    backtestLosses:
+        document.getElementById(
+            "backtestLosses"
+        ),
+
+    backtestWinRate:
+        document.getElementById(
+            "backtestWinRate"
+        ),
+
+    backtestWarning:
+        document.getElementById(
+            "backtestWarning"
         )
 
 };
@@ -760,6 +870,75 @@ async function fetchJSON(
 
 
 /* =========================================================
+   FETCH PLAIN TEXT
+   Some endpoints (blockchain.info's simple /q/ stats) just
+   return a raw number as plain text, not JSON.
+========================================================= */
+
+async function fetchText(
+    url
+) {
+
+    const controller =
+        new AbortController();
+
+
+    const timeout =
+        setTimeout(
+            () => {
+
+                controller.abort();
+
+            },
+            10000
+        );
+
+
+    try {
+
+        const response =
+            await fetch(
+                url,
+                {
+                    cache:
+                        "no-store",
+
+                    signal:
+                        controller.signal
+                }
+            );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                "HTTP " +
+                response.status
+            );
+
+        }
+
+
+        const text =
+            await response.text();
+
+
+        return text.trim();
+
+    } finally {
+
+        clearTimeout(
+            timeout
+        );
+
+    }
+
+}
+
+
+/* =========================================================
    LIVE PRICE STREAM (BINANCE WEBSOCKET)
 ========================================================= */
 
@@ -1057,6 +1236,29 @@ function handleTickerMessage(
         );
 
 
+    /*
+     * n = number of trades executed in the 24h window.
+     * b/a = best bid/ask price at the top of the book.
+     */
+
+    state.tradeCount24h =
+        Number(
+            payload.n
+        );
+
+
+    state.bestBid =
+        Number(
+            payload.b
+        );
+
+
+    state.bestAsk =
+        Number(
+            payload.a
+        );
+
+
     state.lastApiUpdate =
         new Date();
 
@@ -1070,6 +1272,9 @@ function handleTickerMessage(
 
 
     updateDashboard();
+
+
+    updateMarketSignalsUI();
 
 
     addLivePoint();
@@ -1132,29 +1337,25 @@ async function fetchPeriodicMarketData() {
 
 
     const url =
-        CONFIG.API_BASE +
-        "/simple/price" +
-        "?ids=" +
-        CONFIG.COIN_ID +
-        "&vs_currencies=usd,php" +
-        "&include_market_cap=true";
+        CONFIG.BACKEND_API_BASE +
+        "/market/latest";
 
 
     try {
 
-        const data =
+        const response =
             await fetchJSON(
                 url
             );
 
 
-        const btc =
-            data &&
-            data.bitcoin;
+        const market =
+            response &&
+            response.market;
 
 
         if (
-            !btc
+            !market
         ) {
 
             throw new Error(
@@ -1175,14 +1376,10 @@ async function fetchPeriodicMarketData() {
          * so it never looks stuck.
          */
 
-        if (
-            typeof btc.php === "number" &&
-            typeof btc.usd === "number" &&
-            btc.usd > 0
-        ) {
+        if (Number.isFinite(Number(market.usdPhp))) {
 
             state.usdPhpRate =
-                btc.php / btc.usd;
+                Number(market.usdPhp);
 
 
             state.previousPhp =
@@ -1201,7 +1398,7 @@ async function fetchPeriodicMarketData() {
 
                 state.btcPhp =
                     Number(
-                        btc.php
+                        market.btcPhp
                     );
 
             }
@@ -1209,14 +1406,11 @@ async function fetchPeriodicMarketData() {
         }
 
 
-        if (
-            typeof btc.usd_market_cap ===
-            "number"
-        ) {
+        if (Number.isFinite(Number(market.marketCap))) {
 
             state.marketCap =
                 Number(
-                    btc.usd_market_cap
+                    market.marketCap
                 );
 
         }
@@ -1258,66 +1452,43 @@ async function fetchPeriodicMarketData() {
 
 async function fetchMarketSignals() {
 
-    const premiumUrl =
-        CONFIG.FUTURES_API_BASE +
-        "/premiumIndex?symbol=" +
-        CONFIG.FUTURES_SYMBOL;
-
-
-    const openInterestUrl =
-        CONFIG.FUTURES_API_BASE +
-        "/openInterest?symbol=" +
-        CONFIG.FUTURES_SYMBOL;
-
 
     try {
 
-        const [
-            premium,
-            openInterest
-        ] =
-            await Promise.all(
-                [
-                    fetchJSON(
-                        premiumUrl
-                    ),
-
-                    fetchJSON(
-                        openInterestUrl
-                    )
-                ]
+        const data =
+            await fetchJSON(
+                CONFIG.BACKEND_API_BASE +
+                "/signals/latest"
             );
 
 
         if (
-            premium &&
-            typeof premium.lastFundingRate ===
-                "string"
+            data &&
+            Number.isFinite(Number(data.funding_rate))
         ) {
 
             state.fundingRate =
                 Number(
-                    premium.lastFundingRate
+                    data.funding_rate
                 );
 
 
             state.nextFundingTime =
                 Number(
-                    premium.nextFundingTime
+                    new Date(data.next_funding_time).getTime()
                 );
 
         }
 
 
         if (
-            openInterest &&
-            typeof openInterest.openInterest ===
-                "string"
+            data &&
+            Number.isFinite(Number(data.open_interest_btc))
         ) {
 
             state.openInterestBtc =
                 Number(
-                    openInterest.openInterest
+                    data.open_interest_btc
                 );
 
         }
@@ -1355,28 +1526,24 @@ async function fetchFearGreed() {
 
         const data =
             await fetchJSON(
-                CONFIG.FEAR_GREED_API
+                CONFIG.BACKEND_API_BASE +
+                "/signals/latest"
             );
 
 
-        const entry =
-            data &&
-            Array.isArray(data.data) &&
-            data.data[0];
-
-
         if (
-            entry
+            data &&
+            Number.isFinite(Number(data.fear_greed_value))
         ) {
 
             state.fearGreedValue =
                 Number(
-                    entry.value
+                    data.fear_greed_value
                 );
 
 
             state.fearGreedLabel =
-                entry.value_classification ||
+                data.fear_greed_label ||
                 null;
 
         }
@@ -1389,6 +1556,68 @@ async function fetchFearGreed() {
 
         console.warn(
             "Fear & Greed API error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   NETWORK STATS (BLOCKCHAIN.INFO)
+   Network-wide transaction count and hash rate - both
+   change slowly, so they're polled infrequently.
+========================================================= */
+
+async function fetchNetworkStats() {
+
+    try {
+
+        const data =
+            await fetchJSON(
+                CONFIG.BACKEND_API_BASE +
+                "/signals/latest"
+            );
+
+
+        const txCount =
+            Number(data && data.network_tx_count_24h);
+
+
+        const hashRateGHs =
+            Number(data && data.network_hash_rate_ghs);
+
+        if (
+            Number.isFinite(
+                txCount
+            )
+        ) {
+
+            state.networkTxCount24h =
+                txCount;
+
+        }
+
+        if (
+            Number.isFinite(
+                hashRateGHs
+            )
+        ) {
+
+            state.networkHashRateGHs =
+                hashRateGHs;
+
+        }
+
+
+        updateMarketSignalsUI();
+
+
+    } catch (error) {
+
+        console.warn(
+            "Network stats API error:",
             error
         );
 
@@ -1584,6 +1813,126 @@ function updateMarketSignalsUI() {
             elements.fearGreedLabel,
             state.fearGreedLabel ||
             "--"
+        );
+
+    }
+
+
+    /*
+     * 24H TRADE COUNT
+     * Number of individual executions on Binance's
+     * BTCUSDT market in the last 24 hours.
+     */
+
+    if (
+        state.tradeCount24h !== null &&
+        elements.tradeCountValue
+    ) {
+
+        setText(
+            elements.tradeCountValue,
+            Math.round(
+                state.tradeCount24h
+            ).toLocaleString(
+                "en-US"
+            )
+        );
+
+    }
+
+
+    /*
+     * BID/ASK SPREAD
+     * Gap between the best live buy and sell offers -
+     * tighter usually means more liquid trading.
+     */
+
+    if (
+        state.bestBid !== null &&
+        state.bestAsk !== null &&
+        elements.spreadValue
+    ) {
+
+        const spread =
+            state.bestAsk -
+            state.bestBid;
+
+
+        setText(
+            elements.spreadValue,
+            formatUSD(
+                spread
+            )
+        );
+
+
+        if (
+            elements.spreadSub &&
+            state.bestBid > 0
+        ) {
+
+            const spreadPct =
+                (
+                    spread /
+                    state.bestBid
+                ) *
+                100;
+
+
+            setText(
+                elements.spreadSub,
+                spreadPct.toFixed(4) +
+                "% of price"
+            );
+
+        }
+
+    }
+
+
+    /*
+     * NETWORK TRANSACTIONS (24H)
+     * Blockchain-wide transaction count - every BTC
+     * transaction network-wide, not just one exchange.
+     */
+
+    if (
+        state.networkTxCount24h !== null &&
+        elements.networkTxValue
+    ) {
+
+        setText(
+            elements.networkTxValue,
+            Math.round(
+                state.networkTxCount24h
+            ).toLocaleString(
+                "en-US"
+            )
+        );
+
+    }
+
+
+    /*
+     * HASH RATE
+     * Network-wide computing power securing Bitcoin.
+     * A slow-moving fundamental, not a short-term signal.
+     */
+
+    if (
+        state.networkHashRateGHs !== null &&
+        elements.hashRateValue
+    ) {
+
+        const exahashes =
+            state.networkHashRateGHs /
+            1e9;
+
+
+        setText(
+            elements.hashRateValue,
+            exahashes.toFixed(1) +
+            " EH/s"
         );
 
     }
@@ -2360,6 +2709,275 @@ const crosshairPlugin = {
 
 
 /* =========================================================
+   PRICE TAG HELPER
+   Draws a small rounded label near the right edge of the
+   chart at a given y-value, like the floating price/"Start"
+   tags on trading-app charts.
+========================================================= */
+
+function drawPriceTag(
+    ctx,
+    rightEdge,
+    y,
+    text,
+    bgColor,
+    areaTop,
+    areaBottom
+) {
+
+    ctx.save();
+
+
+    ctx.font =
+        "700 11px Inter, system-ui, sans-serif";
+
+
+    const paddingX =
+        8;
+
+    const boxHeight =
+        20;
+
+    const textWidth =
+        ctx.measureText(
+            text
+        ).width;
+
+    const boxWidth =
+        textWidth +
+        paddingX * 2;
+
+
+    /*
+     * Keep the tag fully inside the chart's drawable
+     * area, even when the price it's pointing at sits
+     * right at the very top or bottom of the visible
+     * range - otherwise it gets clipped or overlaps
+     * whatever sits just outside the chart (like the
+     * axis's own gridline labels).
+     */
+
+    const clampedY =
+        (
+            areaTop !== undefined &&
+            areaBottom !== undefined
+        )
+            ? Math.max(
+                areaTop + (boxHeight / 2),
+                Math.min(
+                    areaBottom - (boxHeight / 2),
+                    y
+                )
+            )
+            : y;
+
+
+    const boxX =
+        rightEdge -
+        boxWidth -
+        10;
+
+    const boxY =
+        clampedY -
+        boxHeight / 2;
+
+    const radius =
+        4;
+
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        boxX + radius,
+        boxY
+    );
+
+    ctx.lineTo(
+        boxX + boxWidth - radius,
+        boxY
+    );
+
+    ctx.quadraticCurveTo(
+        boxX + boxWidth,
+        boxY,
+        boxX + boxWidth,
+        boxY + radius
+    );
+
+    ctx.lineTo(
+        boxX + boxWidth,
+        boxY + boxHeight - radius
+    );
+
+    ctx.quadraticCurveTo(
+        boxX + boxWidth,
+        boxY + boxHeight,
+        boxX + boxWidth - radius,
+        boxY + boxHeight
+    );
+
+    ctx.lineTo(
+        boxX + radius,
+        boxY + boxHeight
+    );
+
+    ctx.quadraticCurveTo(
+        boxX,
+        boxY + boxHeight,
+        boxX,
+        boxY + boxHeight - radius
+    );
+
+    ctx.lineTo(
+        boxX,
+        boxY + radius
+    );
+
+    ctx.quadraticCurveTo(
+        boxX,
+        boxY,
+        boxX + radius,
+        boxY
+    );
+
+    ctx.closePath();
+
+
+    ctx.fillStyle =
+        bgColor;
+
+    ctx.fill();
+
+
+    ctx.fillStyle =
+        "#ffffff";
+
+    ctx.textBaseline =
+        "middle";
+
+    ctx.fillText(
+        text,
+        boxX + paddingX,
+        boxY + boxHeight / 2
+    );
+
+
+    ctx.restore();
+
+}
+
+
+/* =========================================================
+   PRICE LABELS PLUGIN
+   Floating "Current" and "Start" price tags anchored to
+   the two dashed/dotted reference lines.
+========================================================= */
+
+const priceLabelsPlugin = {
+
+    id:
+        "priceLabels",
+
+    afterDraw(
+        chart
+    ) {
+
+        const yScale =
+            chart.scales &&
+            chart.scales.y;
+
+
+        if (
+            !yScale
+        ) {
+
+            return;
+
+        }
+
+
+        const area =
+            chart.chartArea;
+
+        const ctx =
+            chart.ctx;
+
+
+        const currentSeries =
+            chart.data.datasets[1] &&
+            chart.data.datasets[1].data;
+
+        const startSeries =
+            chart.data.datasets[2] &&
+            chart.data.datasets[2].data;
+
+
+        if (
+            startSeries &&
+            startSeries.length
+        ) {
+
+            const startValue =
+                startSeries[0];
+
+            const y =
+                yScale.getPixelForValue(
+                    startValue
+                );
+
+
+            drawPriceTag(
+                ctx,
+                area.right,
+                y,
+                "Start " +
+                formatUSD(
+                    startValue
+                ),
+                "rgba(23,29,37,0.92)",
+                area.top,
+                area.bottom
+            );
+
+        }
+
+
+        if (
+            currentSeries &&
+            currentSeries.length
+        ) {
+
+            const currentValue =
+                currentSeries[
+                    currentSeries.length - 1
+                ];
+
+            const y =
+                yScale.getPixelForValue(
+                    currentValue
+                );
+
+
+            drawPriceTag(
+                ctx,
+                area.right,
+                y,
+                formatUSD(
+                    currentValue
+                ),
+                "#f7931a",
+                area.top,
+                area.bottom
+            );
+
+        }
+
+    }
+
+};
+
+
+/* =========================================================
    INITIALIZE CHART
 ========================================================= */
 
@@ -2503,6 +3121,19 @@ function initializeChart() {
                                 tension:
                                     0.25,
 
+                                /*
+                                 * Prevents the curve-smoothing
+                                 * from overshooting past nearby
+                                 * points on a sharp reversal
+                                 * (the small "bump" right before
+                                 * a steep drop/rise) - monotone
+                                 * interpolation stays within the
+                                 * bounds of the surrounding data.
+                                 */
+
+                                cubicInterpolationMode:
+                                    "monotone",
+
                                 fill:
                                     true,
 
@@ -2546,6 +3177,43 @@ function initializeChart() {
                                 order:
                                     2
 
+                            },
+
+                            {
+
+                                label:
+                                    "Start of period",
+
+                                data:
+                                    [],
+
+                                borderColor:
+                                    "rgba(247,147,26,0.45)",
+
+                                borderWidth:
+                                    1,
+
+                                borderDash:
+                                    [
+                                        2,
+                                        3
+                                    ],
+
+                                pointRadius:
+                                    0,
+
+                                pointHoverRadius:
+                                    0,
+
+                                fill:
+                                    false,
+
+                                tension:
+                                    0,
+
+                                order:
+                                    3
+
                             }
 
                         ]
@@ -2559,6 +3227,27 @@ function initializeChart() {
                             true,
 
                         maintainAspectRatio:
+                            false,
+
+
+                        /*
+                         * Animation off entirely. The real
+                         * fix for axis "blinking" is the y-
+                         * range hysteresis in applyChartSeries
+                         * (it keeps the axis stable so it
+                         * rarely needs to rescale at all) -
+                         * animating the rescale just caused a
+                         * different bug: since live data gets
+                         * replaced wholesale on every tick,
+                         * Chart.js can't interpolate cleanly
+                         * and instead animates new points up
+                         * from the bottom of the chart every
+                         * time, which is the "growing"/
+                         * "wiggling" effect on fast-updating
+                         * ranges like 1M/5M.
+                         */
+
+                        animation:
                             false,
 
 
@@ -2736,7 +3425,8 @@ function initializeChart() {
                     },
 
                     plugins: [
-                        crosshairPlugin
+                        crosshairPlugin,
+                        priceLabelsPlugin
                     ]
 
                 }
@@ -2945,13 +3635,203 @@ function buildMarkedSeries(
 
 
 /* =========================================================
+   SNAKE-TIP ANIMATION
+   Instead of asking Chart.js's built-in animation system to
+   reinterpolate the entire array every tick (which breaks
+   down once the window slides and indices no longer line
+   up - that's what caused the earlier "growing from the
+   bottom" bug), this only tweens the single newest point,
+   easing it from its previous value to the new one. Every
+   older point on the line is set directly with no
+   animation, so nothing else can wiggle.
+========================================================= */
+
+let chartTipAnimationFrame =
+    null;
+
+function animateChartTip(
+    targetPrices
+) {
+
+    if (
+        !state.chart ||
+        !targetPrices.length
+    ) {
+
+        return;
+
+    }
+
+
+    const currentData =
+        state.chart.data.datasets[0].data;
+
+    const previousLast =
+        currentData.length
+            ? currentData[
+                currentData.length - 1
+            ]
+            : null;
+
+    const targetLast =
+        targetPrices[
+            targetPrices.length - 1
+        ];
+
+
+    const lastIndex =
+        targetPrices.length - 1;
+
+
+    if (
+        chartTipAnimationFrame
+    ) {
+
+        cancelAnimationFrame(
+            chartTipAnimationFrame
+        );
+
+        chartTipAnimationFrame =
+            null;
+
+    }
+
+
+    const startValue =
+        (
+            previousLast !== null &&
+            previousLast !== undefined &&
+            Number.isFinite(
+                previousLast
+            )
+        )
+            ? previousLast
+            : targetLast;
+
+
+    /*
+     * Set every point except the tip immediately -
+     * only the newest point eases in.
+     */
+
+    state.chart.data.datasets[0].data =
+        targetPrices
+            .slice(
+                0,
+                -1
+            )
+            .concat(
+                [
+                    startValue
+                ]
+            );
+
+
+    if (
+        startValue === targetLast
+    ) {
+
+        state.chart.data.datasets[0].data[lastIndex] =
+            targetLast;
+
+
+        state.chart.update(
+            "none"
+        );
+
+
+        return;
+
+    }
+
+
+    const durationMs =
+        280;
+
+    const startTime =
+        performance.now();
+
+
+    function step(
+        now
+    ) {
+
+        const elapsed =
+            now - startTime;
+
+        const progress =
+            Math.min(
+                elapsed / durationMs,
+                1
+            );
+
+
+        const eased =
+            1 -
+            Math.pow(
+                1 - progress,
+                3
+            );
+
+
+        const value =
+            startValue +
+            (
+                (targetLast - startValue) *
+                eased
+            );
+
+
+        const data =
+            state.chart.data.datasets[0].data;
+
+        data[
+            data.length - 1
+        ] =
+            value;
+
+
+        state.chart.update(
+            "none"
+        );
+
+
+        if (
+            progress < 1
+        ) {
+
+            chartTipAnimationFrame =
+                requestAnimationFrame(
+                    step
+                );
+
+        } else {
+
+            chartTipAnimationFrame =
+                null;
+
+        }
+
+    }
+
+
+    chartTipAnimationFrame =
+        requestAnimationFrame(
+            step
+        );
+
+}
+
+
+/* =========================================================
    APPLY SERIES TO CHART
 ========================================================= */
 
 function applyChartSeries(
     points,
     range,
-    formatLabel
+    formatLabel,
+    animateTip
 ) {
 
     if (
@@ -2975,8 +3855,20 @@ function applyChartSeries(
         series.labels;
 
 
-    state.chart.data.datasets[0].data =
-        series.prices;
+    if (
+        animateTip
+    ) {
+
+        animateChartTip(
+            series.prices
+        );
+
+    } else {
+
+        state.chart.data.datasets[0].data =
+            series.prices;
+
+    }
 
 
     state.chart.data.datasets[0].label =
@@ -3017,6 +3909,203 @@ function applyChartSeries(
                 () =>
                     referencePrice
             );
+
+
+    /*
+     * Dotted reference line at the price the
+     * period STARTED at, so it's easy to see how
+     * far things have moved since then - mirrors
+     * the "Start" marker on trading-app charts.
+     */
+
+    const startPrice =
+        series.prices.length > 0
+            ? series.prices[0]
+            : null;
+
+
+    state.chart.data.datasets[2].data =
+        startPrice === null
+            ? []
+            : series.prices.map(
+                () =>
+                    startPrice
+            );
+
+
+    /*
+     * STABLE Y-AXIS RANGE
+     * Without this, Chart.js recalculates the axis
+     * min/max on every single tick based on whatever's
+     * currently visible - so even a tiny price wiggle
+     * makes the whole axis snap to a new scale, which
+     * reads as the chart "blinking." Instead: compute a
+     * padded range, and only widen it when the data
+     * would actually clip outside the current bounds
+     * (or tighten it if the current bounds have become
+     * way oversized) - otherwise keep reusing the same
+     * bounds so the axis holds still.
+     */
+
+    const freshRange =
+        computeYAxisRange(
+            series.prices
+        );
+
+
+    if (
+        freshRange
+    ) {
+
+        const cached =
+            state.chartYRanges[range];
+
+
+        let finalRange =
+            freshRange;
+
+
+        if (
+            cached
+        ) {
+
+            const stillFits =
+                freshRange.min >= cached.min &&
+                freshRange.max <= cached.max;
+
+
+            const cachedSpan =
+                cached.max - cached.min;
+
+            const freshSpan =
+                freshRange.max - freshRange.min;
+
+
+            const wayOversized =
+                cachedSpan >
+                freshSpan * 2.5;
+
+
+            if (
+                stillFits &&
+                !wayOversized
+            ) {
+
+                finalRange =
+                    cached;
+
+            }
+
+        }
+
+
+        state.chartYRanges[range] =
+            finalRange;
+
+
+        state.chart.options.scales.y.min =
+            finalRange.min;
+
+
+        state.chart.options.scales.y.max =
+            finalRange.max;
+
+    }
+
+}
+
+
+/* =========================================================
+   COMPUTE PADDED Y-AXIS RANGE
+========================================================= */
+
+function computeYAxisRange(
+    prices
+) {
+
+    if (
+        !prices ||
+        !prices.length
+    ) {
+
+        return null;
+
+    }
+
+
+    let min =
+        prices[0];
+
+    let max =
+        prices[0];
+
+
+    prices.forEach(
+        price => {
+
+            if (
+                price < min
+            ) {
+
+                min =
+                    price;
+
+            }
+
+
+            if (
+                price > max
+            ) {
+
+                max =
+                    price;
+
+            }
+
+        }
+    );
+
+
+    if (
+        min === max
+    ) {
+
+        const flatPad =
+            Math.max(
+                min * 0.001,
+                1
+            );
+
+
+        return {
+
+            min:
+                min - flatPad,
+
+            max:
+                max + flatPad
+
+        };
+
+    }
+
+
+    const span =
+        max - min;
+
+    const padding =
+        span * 0.15;
+
+
+    return {
+
+        min:
+            min - padding,
+
+        max:
+            max + padding
+
+    };
 
 }
 
@@ -3191,6 +4280,684 @@ function updatePeriodSummary(
 
 
 /* =========================================================
+   INTERVAL STRIP
+   A row of small blocks, one per closed time interval,
+   colored by whether that interval closed higher (green)
+   or lower (red) than it opened. Purely a historical
+   record of what already happened - not a bet, not a
+   forecast.
+========================================================= */
+
+function renderIntervalStrip(
+    points,
+    range
+) {
+
+    if (
+        !elements.intervalStrip ||
+        !points ||
+        points.length === 0
+    ) {
+
+        return;
+
+    }
+
+
+    const bucketMs =
+        MARK_INTERVAL_MS[range] ||
+        60 * 1000;
+
+
+    const isLiveRange =
+        range === "live" ||
+        Boolean(
+            WINDOW_MINUTES[range]
+        );
+
+
+    const formatter =
+        isLiveRange
+            ? formatShortTime
+            : formatChartDate;
+
+
+    const buckets =
+        new Map();
+
+
+    points.forEach(
+        point => {
+
+            const bucketKey =
+                Math.floor(
+                    point.time.getTime() /
+                    bucketMs
+                );
+
+
+            if (
+                !buckets.has(
+                    bucketKey
+                )
+            ) {
+
+                buckets.set(
+                    bucketKey,
+                    {
+                        time:
+                            point.time,
+
+                        open:
+                            point.price,
+
+                        close:
+                            point.price
+                    }
+                );
+
+            } else {
+
+                buckets.get(
+                    bucketKey
+                ).close =
+                    point.price;
+
+            }
+
+        }
+    );
+
+
+    const ordered =
+        Array.from(
+            buckets.values()
+        ).slice(
+            -8
+        );
+
+
+    if (
+        !ordered.length
+    ) {
+
+        elements.intervalStrip.innerHTML =
+            "";
+
+        return;
+
+    }
+
+
+    elements.intervalStrip.innerHTML =
+        ordered
+            .map(
+                bucket => {
+
+                    const direction =
+                        bucket.close >
+                        bucket.open
+                            ? "up"
+                            : bucket.close <
+                                bucket.open
+                                ? "down"
+                                : "flat";
+
+
+                    return `
+                        <div class="interval-item">
+
+                            <span class="interval-time">
+                                ${formatter(bucket.time)}
+                            </span>
+
+                            <span class="interval-bar ${direction}"></span>
+
+                        </div>
+                    `;
+
+                }
+            )
+            .join("");
+
+}
+
+
+/* =========================================================
+   MOMENTUM BACKTEST CALCULATOR
+   A one-off historical calculation over the live points
+   currently buffered in memory. No money, no running
+   score, no repeat-play loop - just: "how often did this
+   one simple rule hold true in the data we actually have."
+========================================================= */
+
+function findNearestPoint(
+    points,
+    targetTimeMs
+) {
+
+    let nearest =
+        null;
+
+    let bestDiff =
+        Infinity;
+
+
+    points.forEach(
+        point => {
+
+            const diff =
+                Math.abs(
+                    point.time.getTime() -
+                    targetTimeMs
+                );
+
+
+            if (
+                diff < bestDiff
+            ) {
+
+                bestDiff =
+                    diff;
+
+                nearest =
+                    point;
+
+            }
+
+        }
+    );
+
+
+    return {
+
+        point:
+            nearest,
+
+        diffMs:
+            bestDiff
+
+    };
+
+}
+
+
+function parseTimeToMinutes(
+    timeString
+) {
+
+    if (
+        !timeString ||
+        typeof timeString !== "string"
+    ) {
+
+        return null;
+
+    }
+
+
+    const parts =
+        timeString.split(
+            ":"
+        );
+
+
+    if (
+        parts.length < 2
+    ) {
+
+        return null;
+
+    }
+
+
+    const hours =
+        Number(
+            parts[0]
+        );
+
+    const minutes =
+        Number(
+            parts[1]
+        );
+
+
+    if (
+        !Number.isFinite(hours) ||
+        !Number.isFinite(minutes)
+    ) {
+
+        return null;
+
+    }
+
+
+    return (
+        hours * 60
+    ) +
+    minutes;
+
+}
+
+
+function runMomentumBacktest() {
+
+    if (
+        !elements.backtestError
+    ) {
+
+        return;
+
+    }
+
+
+    setText(
+        elements.backtestError,
+        ""
+    );
+
+
+    const startClock =
+        parseTimeToMinutes(
+            elements.backtestStart &&
+            elements.backtestStart.value
+        );
+
+    const pickMin =
+        Number(
+            elements.backtestPick &&
+            elements.backtestPick.value
+        );
+
+    const endMin =
+        Number(
+            elements.backtestEnd &&
+            elements.backtestEnd.value
+        );
+
+
+    if (
+        startClock === null
+    ) {
+
+        setText(
+            elements.backtestError,
+            "Please set a start time."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        !Number.isFinite(pickMin) ||
+        !Number.isFinite(endMin) ||
+        pickMin <= 0 ||
+        endMin <= 0
+    ) {
+
+        setText(
+            elements.backtestError,
+            "Pick and End must be positive numbers of minutes."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        !(
+            pickMin < endMin
+        )
+    ) {
+
+        setText(
+            elements.backtestError,
+            "End (minutes) must be greater than Pick (minutes)."
+        );
+
+        return;
+
+    }
+
+
+    const points =
+        state.livePoints;
+
+
+    if (
+        points.length < 2
+    ) {
+
+        setText(
+            elements.backtestError,
+            "Not enough live data buffered yet - let the dashboard run a bit longer."
+        );
+
+        return;
+
+    }
+
+
+    const roundMs =
+        endMin * 60 * 1000;
+
+    const lastTime =
+        points[
+            points.length - 1
+        ].time.getTime();
+
+
+    /*
+     * Anchor round 1's Start to whichever buffered
+     * point's time-of-day is closest to the chosen
+     * Start Time. The live buffer only holds roughly
+     * the last hour, so an exact match won't usually
+     * exist - fall back to the earliest buffered
+     * point if nothing is reasonably close, and say
+     * so in the results.
+     */
+
+    let anchorNote =
+        null;
+
+    let bestAnchor =
+        points[0];
+
+    let bestAnchorDiff =
+        Infinity;
+
+
+    points.forEach(
+        point => {
+
+            const pointClock =
+                (
+                    point.time.getHours() * 60
+                ) +
+                point.time.getMinutes();
+
+
+            let diff =
+                Math.abs(
+                    pointClock -
+                    startClock
+                );
+
+
+            diff =
+                Math.min(
+                    diff,
+                    (24 * 60) - diff
+                );
+
+
+            if (
+                diff < bestAnchorDiff
+            ) {
+
+                bestAnchorDiff =
+                    diff;
+
+                bestAnchor =
+                    point;
+
+            }
+
+        }
+    );
+
+
+    if (
+        bestAnchorDiff > 5
+    ) {
+
+        anchorNote =
+            "The exact Start Time you chose isn't in the buffered history " +
+            "(it only holds roughly the last hour), so this used the earliest " +
+            "buffered data instead.";
+
+        bestAnchor =
+            points[0];
+
+    }
+
+
+    const firstTime =
+        bestAnchor.time.getTime();
+
+
+    /*
+     * A checkpoint only counts if the nearest
+     * actual tick is within this tolerance of the
+     * requested target - otherwise "near 8:00"
+     * could silently match a tick from a very
+     * different time and produce a meaningless
+     * result.
+     */
+
+    const toleranceMs =
+        30 * 1000;
+
+
+    let wins =
+        0;
+
+    let losses =
+        0;
+
+    let pushes =
+        0;
+
+    let skipped =
+        0;
+
+
+    for (
+        let roundStart = firstTime;
+        roundStart + roundMs <= lastTime;
+        roundStart += roundMs
+    ) {
+
+        const startTarget =
+            roundStart;
+
+        const pickTarget =
+            roundStart +
+            pickMin * 60 * 1000;
+
+        const endTarget =
+            roundStart +
+            endMin * 60 * 1000;
+
+
+        const startFound =
+            findNearestPoint(
+                points,
+                startTarget
+            );
+
+        const pickFound =
+            findNearestPoint(
+                points,
+                pickTarget
+            );
+
+        const endFound =
+            findNearestPoint(
+                points,
+                endTarget
+            );
+
+
+        if (
+            !startFound.point ||
+            !pickFound.point ||
+            !endFound.point ||
+            startFound.diffMs > toleranceMs ||
+            pickFound.diffMs > toleranceMs ||
+            endFound.diffMs > toleranceMs
+        ) {
+
+            skipped =
+                skipped + 1;
+
+            continue;
+
+        }
+
+
+        const momentum =
+            pickFound.point.price -
+            startFound.point.price;
+
+        const outcome =
+            endFound.point.price -
+            pickFound.point.price;
+
+
+        if (
+            momentum === 0 ||
+            outcome === 0
+        ) {
+
+            pushes =
+                pushes + 1;
+
+            continue;
+
+        }
+
+
+        const predictedUp =
+            momentum > 0;
+
+        const actualUp =
+            outcome > 0;
+
+
+        if (
+            predictedUp === actualUp
+        ) {
+
+            wins =
+                wins + 1;
+
+        } else {
+
+            losses =
+                losses + 1;
+
+        }
+
+    }
+
+
+    const decisive =
+        wins + losses;
+
+    const winRate =
+        decisive > 0
+            ? (
+                wins / decisive
+            ) * 100
+            : null;
+
+
+    setText(
+        elements.backtestRounds,
+        String(
+            decisive + pushes
+        )
+    );
+
+
+    setText(
+        elements.backtestWins,
+        String(
+            wins
+        )
+    );
+
+
+    setText(
+        elements.backtestLosses,
+        String(
+            losses
+        )
+    );
+
+
+    setText(
+        elements.backtestWinRate,
+        winRate === null
+            ? "--"
+            : winRate.toFixed(1) + "%"
+    );
+
+
+    if (
+        elements.backtestWarning
+    ) {
+
+        let message =
+            "";
+
+
+        if (
+            decisive === 0
+        ) {
+
+            message =
+                "No complete rounds found in the currently buffered live history " +
+                "(the live buffer only holds roughly the last hour, and resets on " +
+                "page refresh). Let the dashboard run longer, then run again.";
+
+        } else if (
+            decisive < 10
+        ) {
+
+            message =
+                "Only " +
+                decisive +
+                " round(s) found - nowhere near enough to draw any real conclusion " +
+                "about this rule. Treat this number as noise, not a result.";
+
+        } else {
+
+            message =
+                "Based on " +
+                decisive +
+                " round(s) from the live history currently buffered in this tab. " +
+                "This describes what already happened in that window - it says " +
+                "nothing about what happens next, and it isn't financial advice.";
+
+        }
+
+
+        if (
+            anchorNote
+        ) {
+
+            message =
+                anchorNote +
+                " " +
+                message;
+
+        }
+
+
+        elements.backtestWarning.textContent =
+            message;
+
+    }
+
+}
+
+
+/* =========================================================
    TIME-WINDOW LOOKUP (MINUTES)
    Shared between the chart and the ticker table so both
    respect the same range definitions.
@@ -3273,12 +5040,19 @@ function updateChart() {
     applyChartSeries(
         points,
         state.selectedRange,
-        formatShortTime
+        formatShortTime,
+        true
     );
 
 
     updatePeriodSummary(
         points
+    );
+
+
+    renderIntervalStrip(
+        points,
+        state.selectedRange
     );
 
 
@@ -3319,6 +5093,20 @@ async function fetchHistoricalChart(
     }
 
 
+    const backendRange =
+        days <= 1
+            ? "1h"
+            : days <= 7
+                ? "7d"
+                : days <= 30
+                    ? "30d"
+                    : "1y";
+
+    const backendUrl =
+        CONFIG.BACKEND_API_BASE +
+        "/market/history?range=" +
+        backendRange;
+
     const url =
         CONFIG.API_BASE +
         "/coins/" +
@@ -3331,10 +5119,53 @@ async function fetchHistoricalChart(
 
     try {
 
-        const data =
-            await fetchJSON(
-                url
+        let data;
+
+        try {
+
+            const backendData =
+                await fetchJSON(
+                    backendUrl
+                );
+
+            if (
+                backendData.points &&
+                backendData.points.length > 0
+            ) {
+
+                data = {
+                    prices:
+                        backendData.points.map(
+                            point => [
+                                new Date(
+                                    point.time
+                                ).getTime(),
+                                Number(
+                                    point.close
+                                )
+                            ]
+                        )
+                };
+
+            }
+
+        } catch (backendError) {
+
+            console.warn(
+                "Backend history unavailable; using CoinGecko fallback:",
+                backendError
             );
+
+        }
+
+        if (!data) {
+
+            data =
+                await fetchJSON(
+                    url
+                );
+
+        }
 
 
         if (
@@ -3459,7 +5290,9 @@ async function fetchHistoricalChart(
         ) {
 
             elements.chartLoading.textContent =
-                "Unable to load historical data.";
+                error.message === "RATE_LIMITED"
+                    ? "CoinGecko rate-limited this request. Their free/keyless tier has a shared, low limit - see the note below the chart."
+                    : "Unable to load historical data.";
 
             elements.chartLoading.style.display =
                 "flex";
@@ -3469,7 +5302,9 @@ async function fetchHistoricalChart(
 
         setText(
             elements.chartStatus,
-            "Historical data unavailable"
+            error.message === "RATE_LIMITED"
+                ? "Rate limited by CoinGecko"
+                : "Historical data unavailable"
         );
 
     }
@@ -3503,6 +5338,12 @@ function renderHistoricalChart(
 
     updatePeriodSummary(
         points
+    );
+
+
+    renderIntervalStrip(
+        points,
+        state.selectedRange
     );
 
 
@@ -3930,6 +5771,21 @@ function startAutoUpdate() {
             CONFIG.FEAR_GREED_INTERVAL
         );
 
+
+    /*
+     * Network-wide tx count + hash rate also barely
+     * move minute to minute.
+     */
+
+    fetchNetworkStats();
+
+
+    state.networkStatsTimer =
+        setInterval(
+            fetchNetworkStats,
+            CONFIG.NETWORK_STATS_INTERVAL
+        );
+
 }
 
 
@@ -4037,6 +5893,18 @@ function initializeApp() {
 
 
     initializeTickerRangeButtons();
+
+
+    if (
+        elements.runBacktestBtn
+    ) {
+
+        elements.runBacktestBtn.addEventListener(
+            "click",
+            runMomentumBacktest
+        );
+
+    }
 
 
     /*
